@@ -121,7 +121,6 @@ class XgateBarqTestCase(unittest.TestCase):
         zero_tantrix_test = jnp.sum(robustness_dict['tantrix_area_test']**2)
 
         self.assertTrue(jnp.isclose(zero_tantrix_test, 0.))
-
 class NumericalStabilityTestCase(unittest.TestCase):
     """
     Tests the numerical stability handling in OptimizableSpaceCurve.optimize().
@@ -170,12 +169,8 @@ class NumericalStabilityTestCase(unittest.TestCase):
         original_verbosity = settings.options.get('OPTIMIZATION_VERBOSITY', 0)
         original_retries = settings.options.get('MAX_OPTIMIZATION_RETRIES', 3)
         original_check_freq = settings.options.get('NUMERICAL_CHECK_FREQUENCY', 1)
-        original_debug_nans = jax.config.jax_debug_nans
         
         try:
-            # Disable JAX NaN debugging to allow our recovery mechanism to work
-            jax.config.update("jax_debug_nans", False)
-            
             # Configure for aggressive testing
             settings.options['OPTIMIZATION_VERBOSITY'] = 1  # Enable warnings
             settings.options['MAX_OPTIMIZATION_RETRIES'] = 2
@@ -206,16 +201,16 @@ class NumericalStabilityTestCase(unittest.TestCase):
                 
                 # Check that parameters are finite (recovery worked)
                 self.assertTrue(jnp.all(jnp.isfinite(final_params)), 
-                            f"Final parameters are not finite: {final_params}")
+                               f"Final parameters are not finite: {final_params}")
                 
                 # Verify that warnings were issued (indicates recovery happened)
                 warning_messages = [str(warning.message) for warning in w 
-                                if issubclass(warning.category, RuntimeWarning)]
+                                  if issubclass(warning.category, RuntimeWarning)]
                 
                 # Should have at least one warning about numerical recovery or instability
                 recovery_warnings = [msg for msg in warning_messages 
-                                if "numerical instability" in msg.lower() or 
-                                    "recover" in msg.lower()]
+                                   if "numerical instability" in msg.lower() or 
+                                      "recover" in msg.lower()]
                 
                 # If no recovery warnings, the test might not have triggered instability
                 # In that case, we force a verification by checking the loss function directly
@@ -228,46 +223,36 @@ class NumericalStabilityTestCase(unittest.TestCase):
                         grad_val = self.optspacecurve.loss_grad(test_params)
                         # If either loss or gradient is NaN/Inf, our loss function works
                         has_instability = (jnp.isnan(loss_val) or jnp.isinf(loss_val) or 
-                                        jnp.any(jnp.isnan(grad_val)) or jnp.any(jnp.isinf(grad_val)))
+                                         jnp.any(jnp.isnan(grad_val)) or jnp.any(jnp.isinf(grad_val)))
                         self.assertTrue(has_instability, 
-                                    "Loss function should produce numerical instability for large parameters")
+                                      "Loss function should produce numerical instability for large parameters")
                     except Exception:
                         # Exception during gradient computation also indicates instability
                         pass
                 else:
                     # If we got recovery warnings, the test worked as expected
                     self.assertGreater(len(recovery_warnings), 0, 
-                                    "Expected recovery warnings to be issued")
+                                     "Expected recovery warnings to be issued")
         
         finally:
             # Restore original settings
             settings.options['OPTIMIZATION_VERBOSITY'] = original_verbosity
             settings.options['MAX_OPTIMIZATION_RETRIES'] = original_retries
             settings.options['NUMERICAL_CHECK_FREQUENCY'] = original_check_freq
-            jax.config.update("jax_debug_nans", original_debug_nans)
+
     def test_parameter_validation(self):
         """Test the parameter validation functions directly"""
         
-        # Temporarily disable JAX NaN debugging to test our validation
-        original_debug_nans = jax.config.jax_debug_nans
+        # Test valid parameters
+        valid_params = jnp.array([1.0, 2.0, 3.0])
+        self.assertTrue(self.optspacecurve._is_params_valid(valid_params))
         
-        try:
-            jax.config.update("jax_debug_nans", False)
-            
-            # Test valid parameters
-            valid_params = jnp.array([1.0, 2.0, 3.0])
-            self.assertTrue(self.optspacecurve._is_params_valid(valid_params))
-            
-            # Test invalid parameters
-            invalid_params = jnp.array([jnp.nan, 2.0, 3.0])
-            self.assertFalse(self.optspacecurve._is_params_valid(invalid_params))
-            
-            invalid_params = jnp.array([jnp.inf, 2.0, 3.0])
-            self.assertFalse(self.optspacecurve._is_params_valid(invalid_params))
-            
-        finally:
-            # Restore original JAX NaN debugging setting
-            jax.config.update("jax_debug_nans", original_debug_nans)
+        # Test invalid parameters
+        invalid_params = jnp.array([jnp.nan, 2.0, 3.0])
+        self.assertFalse(self.optspacecurve._is_params_valid(invalid_params))
+        
+        invalid_params = jnp.array([jnp.inf, 2.0, 3.0])
+        self.assertFalse(self.optspacecurve._is_params_valid(invalid_params))
 
     def test_parameter_perturbation(self):
         """Test that parameter perturbation works correctly"""
@@ -286,8 +271,6 @@ class NumericalStabilityTestCase(unittest.TestCase):
         diff = jnp.abs(perturbed - base_params)
         self.assertTrue(jnp.all(diff > 0))  # Should be different
         self.assertTrue(jnp.all(diff < 1e-2))  # But not too different
-
-
 class BarqCurveFittingTestCase(unittest.TestCase):
     """
     Tests for the curve fitting functionality in BarqCurve.
